@@ -1,0 +1,14 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Data files (optional: ignore lab data)
+*.xlsx
+*.csv
+
+# macOS system file
+.DS_Store
+
