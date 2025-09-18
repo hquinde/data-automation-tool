@@ -37,7 +37,7 @@ class ExcelExtractor(Extractor):
             return wb[self.sheet]
 
         # Otherwise, scan all sheets and pick the first that has our headers
-        wanted = {"Sample ID", "Mean (per analysis type)", "PPM", "Adjusted ABS"}
+        wanted = {"Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS"}
         for name in wb.sheetnames:
             ws = wb[name]
             rows = ws.iter_rows(values_only=True)
@@ -60,7 +60,7 @@ class ExcelExtractor(Extractor):
 
         header = list(next(rows, []))  # the header line (row with titles)
 
-        wanted = {"Sample ID", "Mean (per analysis type)", "PPM", "Adjusted ABS"}
+        wanted = {"Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS"}
 
         header_to_idx: dict[str, int] = {}
         for idx, name in enumerate(header):
@@ -96,6 +96,7 @@ class ExcelExtractor(Extractor):
                     return row[i] if i < len(row) else None
 
                 sample_id    = self._to_str(at("Sample ID"))
+                sample_type  =  self._to_str(at("Sample Type"))
                 mean         = self._to_float(at("Mean (per analysis type)"))
                 ppm          = self._to_float(at("PPM"))
                 adjusted_abs = self._to_float(at("Adjusted ABS"))
@@ -104,7 +105,7 @@ class ExcelExtractor(Extractor):
                 if not sample_id and mean is None and ppm is None and adjusted_abs is None:
                     continue
 
-                yield Record( sample_id=sample_id, mean=mean, ppm=ppm, adjusted_abs=adjusted_abs)
+                yield Record( sample_id=sample_id, sample_type=sample_type ,mean=mean, ppm=ppm, adjusted_abs=adjusted_abs)
 
         finally:
             wb.close()
@@ -115,7 +116,7 @@ class ExcelExtractor(Extractor):
 ex = ExcelExtractor("test_file.xlsx", sheet=None, header_row_index=1)
 
 for rec in ex.records():
-    print(rec.sample_id, rec.mean, rec.ppm, rec.adjusted_abs)
+    print(rec.sample_id, rec.sample_type, rec.mean, rec.ppm, rec.adjusted_abs)
 
 #----#
 

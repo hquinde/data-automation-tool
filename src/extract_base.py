@@ -7,6 +7,7 @@ from typing import Iterator
 class Record:
     """One row from Excel with only the important values."""
     sample_id: str              # Column G
+    sample_type: str            # Column H 
     mean: float | None          # Column I
     ppm: float | None           # Column L
     adjusted_abs: float | None  # Column M -> Needed for "Calibration -> Will work on it soon
