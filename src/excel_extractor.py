@@ -110,7 +110,8 @@ class ExcelExtractor(Extractor):
         finally:
             wb.close()
 
-#----#
+'''
+
 # Example use
 
 ex = ExcelExtractor("test_file.xlsx", sheet=None, header_row_index=1)
@@ -118,7 +119,8 @@ ex = ExcelExtractor("test_file.xlsx", sheet=None, header_row_index=1)
 for rec in ex.records():
     print(rec.sample_id, rec.sample_type, rec.mean, rec.ppm, rec.adjusted_abs)
 
-#----#
+
+'''
 
 
 
