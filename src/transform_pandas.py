@@ -2,7 +2,6 @@
 from excel_extractor import ExcelExtractor
 import pandas as pd
 from typing import Dict, Optional, List
-import re
 
 
 ex = ExcelExtractor("test_file_nc.xlsx", sheet="", header_row_index=1)
@@ -45,12 +44,7 @@ wanted_Samples = [
 df_qc      = pd.DataFrame([r.__dict__ for r in wanted_QC])
 df_samples = pd.DataFrame([r.__dict__ for r in wanted_Samples])
 
-print(df_samples)
-
-
-
 # QC REPORT
-
 class QCReporter:
     def __init__(self, df: pd.DataFrame, targets: Optional[Dict[str, float]] = None):
         cols = [c for c in ["sample_id", "ppm"] if c in df.columns]
@@ -157,14 +151,81 @@ class QCReporter:
 
         return pd.DataFrame(output_rows)
 
+
+# ---------------- Calculations (integrated) ----------------
+class Calculations:
+    @staticmethod
+    def avg(values):
+        if values is None:
+            return None
+        vals = [float(v) for v in values if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    @staticmethod
+    def rpd(v1, v2):
+        if v1 is None or v2 is None:
+            return None
+        v1, v2 = float(v1), float(v2)
+        mean_val = (v1 + v2) / 2.0
+        if mean_val == 0:
+            return None
+        return abs(v1 - v2) / mean_val * 100.0
+
+    @staticmethod
+    def pair_avg_df(df_pair, value_col="mean"):
+        if df_pair is None or value_col not in df_pair.columns:
+            return None
+        return Calculations.avg(df_pair[value_col].tolist())
+
+    @staticmethod
+    def pair_rpd_df(df_pair, value_col="mean"):
+        if df_pair is None or len(df_pair) != 2 or value_col not in df_pair.columns:
+            return None
+        v1, v2 = df_pair[value_col].tolist()
+        return Calculations.rpd(v1, v2)
+    
+    @staticmethod
+    def to_umol_per_l_c(avg_mean, factor: float = 83.26):
+        """Convert an average mean to µmol/L C using the given factor."""
+        if avg_mean is None:
+            return None
+        return float(avg_mean) * float(factor)
+
+
 class SampleReporter:
     def __init__(self) -> None:
         pass
 
-'''
-qc = QCReporter(df)
-print(qc.table())
-'''
+    def group_pairs(self, df, group_col="sample_id"):
+        """
+        Groups each set of rows with the same sample_id into pairs.
+        Returns a list of DataFrames, each containing 2 rows (last may be 1 if odd).
+        """
+        pairs = []
+        for _, group in df.groupby(group_col):
+            group = group.sort_index()
+            pair_list = [group.iloc[i:i+2] for i in range(0, len(group), 2)]
+            pairs.extend(pair_list)
+        return pairs
+
+    def compute_pair_average(self, df_pair, value_col="mean"):
+        """
+        Given a 1-2 row DataFrame (a pair), compute and return the average of `value_col`.
+        """
+        return Calculations.pair_avg_df(df_pair, value_col=value_col)
+
+    def compute_pair_rpd(self, df_pair, value_col="mean"):
+        """
+        Given a 2-row DataFrame (a pair), compute and return the %RPD of `value_col`.
+        """
+        return Calculations.pair_rpd_df(df_pair, value_col=value_col)
+    
+    def compute_pair_umol_per_l_c(self, df_pair, value_col="mean", factor: float = 83.26):
+        """
+        Compute µmol/L C for a pair = (average of `value_col`) * factor.
+        """
+        avg_mean = self.compute_pair_average(df_pair, value_col=value_col)
+        return Calculations.to_umol_per_l_c(avg_mean, factor=factor)
 
 
 
@@ -172,15 +233,28 @@ print(qc.table())
 
 
 
-'''
 
-# for calibration, will figure this part in the future. IN THE WORKS
-# will have version
+# Group pairs automatically
+sr = SampleReporter()
+pairs = sr.group_pairs(df_samples)
 
-wanted_for_calibration = [r for r in records if r.sample_type == "Update Standard"]
 
-df_for_calibration = pd.DataFrame([r.__dict__ for r in wanted_for_calibration])
 
-print(df_for_calibration)
+print(df_samples)
 
-'''
+# Optional: see the grouped pairs + calculations
+for i, p in enumerate(pairs, 1):
+    sid = str(p.iloc[0]["sample_id"]) if not p.empty else "NA"
+    avg_mean = sr.compute_pair_average(p, value_col="mean")
+    rpd_mean = sr.compute_pair_rpd(p, value_col="mean")
+    print(f"\n--- Pair {i} (sample_id={sid}) ---")
+    print(p)
+    print(f"Average(mean): {avg_mean}")
+    print(f"%RPD(mean): {rpd_mean}")
+
+
+for p in pairs:
+    sid = str(p.iloc[0]["sample_id"]) if not p.empty else "NA"
+    avg_mean = sr.compute_pair_average(p, "mean")
+    umol = sr.compute_pair_umol_per_l_c(p, "mean", factor=83.26)
+    print(f"{sid} → avg(mean)={avg_mean}, µmol/L C={umol}")
