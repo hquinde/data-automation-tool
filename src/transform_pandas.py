@@ -3,6 +3,19 @@ from excel_extractor import ExcelExtractor
 import pandas as pd
 from typing import Dict, Optional, List
 
+class Format:
+
+
+    #for sample class
+    @staticmethod
+    def group_pairs(df: pd.DataFrame, group_col: str = "sample_id"):
+        pairs = []
+        for _, group in df.groupby(group_col):
+            group = group.sort_index()
+            pair_list = [group.iloc[i:i+2] for i in range(0, len(group), 2)]
+            pairs.extend(pair_list)
+        return pairs
+
 
 ex = ExcelExtractor("test_file_nc.xlsx", sheet="", header_row_index=1)
 records = list(ex.records())
@@ -193,50 +206,30 @@ class Calculations:
 
 
 class SampleReporter:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, value_col: str = "mean", factor: float = 83.26) -> None:
+        self.value_col = value_col
+        self.factor = factor
 
-    def group_pairs(self, df, group_col="sample_id"):
-        """
-        Groups each set of rows with the same sample_id into pairs.
-        Returns a list of DataFrames, each containing 2 rows (last may be 1 if odd).
-        """
-        pairs = []
-        for _, group in df.groupby(group_col):
-            group = group.sort_index()
-            pair_list = [group.iloc[i:i+2] for i in range(0, len(group), 2)]
-            pairs.extend(pair_list)
-        return pairs
+    def compute_pair_average(self, df_pair: pd.DataFrame, value_col: str | None = None) -> float:
+        vcol = value_col or self.value_col
+        return Calculations.pair_avg_df(df_pair, value_col=vcol)
 
-    def compute_pair_average(self, df_pair, value_col="mean"):
-        """
-        Given a 1-2 row DataFrame (a pair), compute and return the average of `value_col`.
-        """
-        return Calculations.pair_avg_df(df_pair, value_col=value_col)
+    def compute_pair_rpd(self, df_pair: pd.DataFrame, value_col: str | None = None) -> float | None:
+        vcol = value_col or self.value_col
+        return Calculations.pair_rpd_df(df_pair, value_col=vcol)
 
-    def compute_pair_rpd(self, df_pair, value_col="mean"):
-        """
-        Given a 2-row DataFrame (a pair), compute and return the %RPD of `value_col`.
-        """
-        return Calculations.pair_rpd_df(df_pair, value_col=value_col)
-    
-    def compute_pair_umol_per_l_c(self, df_pair, value_col="mean", factor: float = 83.26):
-        """
-        Compute µmol/L C for a pair = (average of `value_col`) * factor.
-        """
-        avg_mean = self.compute_pair_average(df_pair, value_col=value_col)
-        return Calculations.to_umol_per_l_c(avg_mean, factor=factor)
+    def compute_pair_umol_per_l_c(self, df_pair: pd.DataFrame, value_col: str | None = None, factor: float | None = None) -> float:
+        vcol = value_col or self.value_col
+        f = factor if factor is not None else self.factor
+        avg_mean = self.compute_pair_average(df_pair, value_col=vcol)
+        return Calculations.to_umol_per_l_c(avg_mean, factor=f)
 
 
 
-
-
-
-
-
+'''
 # Group pairs automatically
 sr = SampleReporter()
-pairs = sr.group_pairs(df_samples)
+pairs = Format.group_pairs(df_samples)
 
 
 
@@ -258,3 +251,4 @@ for p in pairs:
     avg_mean = sr.compute_pair_average(p, "mean")
     umol = sr.compute_pair_umol_per_l_c(p, "mean", factor=83.26)
     print(f"{sid} → avg(mean)={avg_mean}, µmol/L C={umol}")
+'''
