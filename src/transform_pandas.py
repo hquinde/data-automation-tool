@@ -2,17 +2,21 @@
 from excel_extractor import ExcelExtractor
 import pandas as pd
 from typing import Dict, Optional, List
-
+    
 class Format:
-    #for sample class
-    @staticmethod
-    def group_pairs(df: pd.DataFrame, group_col: str = "sample_id"):
-        pairs = []
-        for _, group in df.groupby(group_col):
+    def __init__(self, df: pd.DataFrame, group_col: str = "sample_id"):
+        self.pairs = []
+        
+        # Group by the specified column
+        for i, group in df.groupby(group_col):
             group = group.sort_index()
-            pair_list = [group.iloc[i:i+2] for i in range(0, len(group), 2)]
-            pairs.extend(pair_list)
-        return pairs
+            
+            # Split into pairs of rows
+            for i in range(0, len(group), 2):
+                pair = group.iloc[i:i+2]
+                self.pairs.append(pair)
+
+
 
 
 ex = ExcelExtractor("test_file_nc.xlsx", sheet="", header_row_index=1)
@@ -221,6 +225,8 @@ class SampleReporter:
         f = factor if factor is not None else self.factor
         avg_mean = self.compute_pair_average(df_pair, value_col=vcol)
         return Calculations.to_umol_per_l_c(avg_mean, factor=f)
+    
+
 
 
 

@@ -1,140 +1,91 @@
 # excel_extractor.py
 from openpyxl import load_workbook
-from typing import Iterator, Optional
+from typing import Iterator
 from extract_base import Extractor, Record
 
 class ExcelExtractor(Extractor):
-
-    def __init__(self, path: str, sheet: str | None = None, header_row_index: int = 1):
+    def __init__(self, path: str, header_row_index: int = 1):
         """
         path: path to the Excel file
-        sheet: specific sheet name, or None to use the first sheet -> be ready to edit this later for other machines
         header_row_index: which row has the headers (1-based, usually 1)
         """
         self.path = path
-        self.sheet = sheet
         self.header_row_index = header_row_index
+        self.columns = {}  # will be filled automatically
 
+        # Auto-map columns from header row
+        wb = load_workbook(self.path, read_only=True, data_only=True)
+        ws = wb.active  # always first sheet
+        self.map_columns(ws)
+        wb.close()
+
+    def map_columns(self, ws) -> None:
+        """Build self.columns = {title: index} from the header row."""
+        self.columns.clear()
+        for i, title in enumerate(ws[self.header_row_index]):
+            if title.value is None:
+                continue
+            name = str(title.value).strip()
+            if name:
+                self.columns.setdefault(name, i)
 
     @staticmethod
-    def _to_float(value) -> float | None: # changes value in cell into a float
-
-        if value is None or value == "": #might have to edit this because idk how empty well would be
+    def to_float(value) -> float | None:
+        if value is None or value == "":
             return None
         try:
             return float(value)
-        except (TypeError) or (ValueError):
+        except (TypeError, ValueError):
             return None
 
     @staticmethod
-    def _to_str(value) -> str | None:
+    def to_str(value) -> str:
         return "" if value is None else str(value).strip()
-    
 
-    def _pick_sheet(self, wb):
-        # If the user specified a sheet, honor it
-        if self.sheet:
-            return wb[self.sheet]
-
-        # Otherwise, scan all sheets and pick the first that has our headers
-        wanted = {"Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS"}
-        for name in wb.sheetnames:
-            ws = wb[name]
-            rows = ws.iter_rows(values_only=True)
-            for _ in range(self.header_row_index - 1):
-                next(rows, None)
-            header = list(next(rows, []))
-            normalized = { (str(h).strip() if h is not None else "") for h in header }
-            if any(h in normalized for h in wanted):
-                return ws
-        # Fallback: active sheet
-        return wb.active
-
-
-    def _find_header_map(self, ws) -> dict[str, int]:
-        rows = ws.iter_rows(values_only=True)
-
-        # jump to the header row
-        for _ in range(self.header_row_index - 1):
-            next(rows, None)
-
-        header = list(next(rows, []))  # the header line (row with titles)
-
-        wanted = {"Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS"}
-
-        header_to_idx: dict[str, int] = {}
-        for idx, name in enumerate(header):
-            if isinstance(name, str):
-                name_clean = name.strip()
-                if name_clean in wanted:
-                    header_to_idx[name_clean] = idx
-
-        missing = wanted - set(header_to_idx.keys())
-        if missing:
-            raise ValueError(f"Missing required header(s): {', '.join(missing)}")
-
-        return header_to_idx
-
-
-    def records(self) -> Iterator[Record]: # see if you can change it
+    def records(self) -> Iterator[Record]:
         wb = load_workbook(self.path, read_only=True, data_only=True)
         try:
-            ws = self._pick_sheet(wb)
+            ws = wb.active  # always first sheet
 
-            # get where each header is
-            header_map = self._find_header_map(ws)
+            # Resolve indices once (faster per-row)
+            idx_sample_id    = self.columns.get("Sample ID")
+            idx_sample_type  = self.columns.get("Sample Type")
+            idx_mean         = self.columns.get("Mean (per analysis type)")
+            idx_ppm          = self.columns.get("PPM")
+            idx_adjusted_abs = self.columns.get("Adjusted ABS")
 
-            # start reading AFTER the header row
-            rows = ws.iter_rows(values_only=True)
-            for _ in range(self.header_row_index):  # skip header rows
-                next(rows, None)
+            for row in ws.iter_rows(min_row=self.header_row_index + 1, values_only=True):
+                def get(idx: int | None):
+                    return None if idx is None or idx >= len(row) else row[idx]
 
-            for row in rows:
-                # helper to fetch a cell by header name safely
-                def at(name: str):
-                    i = header_map[name]
-                    return row[i] if i < len(row) else None
+                sample_id    = self.to_str(get(idx_sample_id))
+                sample_type  = self.to_str(get(idx_sample_type))
+                mean         = self.to_float(get(idx_mean))
+                ppm          = self.to_float(get(idx_ppm))
+                adjusted_abs = self.to_float(get(idx_adjusted_abs))
 
-                sample_id    = self._to_str(at("Sample ID"))
-                sample_type  =  self._to_str(at("Sample Type"))
-                mean         = self._to_float(at("Mean (per analysis type)"))
-                ppm          = self._to_float(at("PPM"))
-                adjusted_abs = self._to_float(at("Adjusted ABS"))
-
-                # skip totally empty lines
                 if not sample_id and mean is None and ppm is None and adjusted_abs is None:
                     continue
 
-                yield Record( sample_id=sample_id, sample_type=sample_type ,mean=mean, ppm=ppm, adjusted_abs=adjusted_abs)
-
+                yield Record(
+                    sample_id=sample_id,
+                    sample_type=sample_type,
+                    mean=mean,
+                    ppm=ppm,
+                    adjusted_abs=adjusted_abs
+                )
         finally:
             wb.close()
+
 
 '''
 
 # Example use
 
-ex = ExcelExtractor("test_file.xlsx", sheet=None, header_row_index=1)
+ex = ExcelExtractor("test_file.xlsx", header_row_index = 1)
 
 for rec in ex.records():
     print(rec.sample_id, rec.sample_type, rec.mean, rec.ppm, rec.adjusted_abs)
 
 
 '''
-
-
-
-
-
-        
-
-
-    
-
-
-
-
-
-
-
-
