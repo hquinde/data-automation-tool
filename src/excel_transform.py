@@ -1,7 +1,10 @@
 # excel_transform.py
+import re
+from typing import List, Optional, Dict
+import pandas as pd
+from excel_extract import Extract
 
 
-'''
 
 # ---------- Pairing helper ----------
 class Format:
@@ -224,10 +227,7 @@ class SampleReporter:
         f = factor if factor is not None else self.factor
         avg_mean = self.compute_pair_average(df_pair, value_col=vcol)
         return Calculations.to_umol_per_l_c(avg_mean, factor=f)
-'''
 
-
-'''
 # ---------- Use it ----------
 sr = SampleReporter()
 pairs = Format.group_pairs(df_samples)
@@ -248,58 +248,3 @@ for p in pairs:
     avg_mean = sr.compute_pair_average(p, "mean")
     umol = sr.compute_pair_umol_per_l_c(p, "mean", factor=83.26)
     print(f"{sid} → avg(mean)={avg_mean}, µmol/L C={umol}")
-'''
-
-
-
-from excel_extract import Extract
-from typing import List, Any
-
-# --- extract ---
-ex = Extract("test_file.xlsx", header_row_index=1)
-records = list(ex.records())
-
-class Transform:
-    def __init__(self, records):
-        # keep raw record OBJECTS; all work is funneled through transform()
-        self.records = records
-
-    # ----- internal helpers -----
-    def _group_pairs(self, group_title: str) -> List[List[Any]]:
-        # group by attribute while preserving first-seen order
-        groups: dict[Any, List[Any]] = {}
-        order: List[Any] = []
-
-        for rec in self.records:
-            key = getattr(rec, group_attr, None)
-            if key not in groups:
-                groups[key] = []
-                order.append(key)
-            groups[key].append(rec)
-
-        # slice each group into 2-record chunks
-        pairs: List[List[Any]] = []
-        for key in order:
-            grp = groups[key]
-            for i in range(0, len(grp), 2):
-                chunk = grp[i:i+2]
-                if chunk:
-                    pairs.append(chunk)
-        return pairs
-
-# --- usage ---
-tf = Transform(records)
-pairs = tf.transform()  # everything flows through transform()
-
-print(tf)
-print(pairs)
-
-
-
-        
-
-    
-
-
-
-
