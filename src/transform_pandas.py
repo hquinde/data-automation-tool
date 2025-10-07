@@ -4,8 +4,6 @@ import pandas as pd
 from typing import Dict, Optional, List
 
 class Format:
-
-
     #for sample class
     @staticmethod
     def group_pairs(df: pd.DataFrame, group_col: str = "sample_id"):
@@ -226,7 +224,7 @@ class SampleReporter:
 
 
 
-'''
+
 # Group pairs automatically
 sr = SampleReporter()
 pairs = Format.group_pairs(df_samples)
@@ -251,4 +249,3 @@ for p in pairs:
     avg_mean = sr.compute_pair_average(p, "mean")
     umol = sr.compute_pair_umol_per_l_c(p, "mean", factor=83.26)
     print(f"{sid} → avg(mean)={avg_mean}, µmol/L C={umol}")
-'''
