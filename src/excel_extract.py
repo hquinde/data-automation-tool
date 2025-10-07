@@ -1,9 +1,9 @@
-# excel_extractor.py
+# excel_extract.py
 from openpyxl import load_workbook
 from typing import Iterator
 from extract_base import Extractor, Record
 
-class Extractor(Extractor):
+class Extract(Extractor):
     def __init__(self, path: str, header_row_index: int = 1):
         """
         path: path to the Excel file
@@ -76,13 +76,3 @@ class Extractor(Extractor):
     @staticmethod
     def to_str(value) -> str:
         return "" if value is None else str(value).strip()
-
-
-
-'''
-# Example use
-ex = Extractor("test_file.xlsx", header_row_index = 1)
-for rec in ex.records():
-    print(rec.sample_id, rec.sample_type, rec.mean, rec.ppm, rec.adjusted_abs)
-
-'''

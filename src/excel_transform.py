@@ -1,29 +1,36 @@
-# transform_pandas.py
-from excel_extractor import ExcelExtractor
+# excel_transform.py
+from excel_extract import Extract
 import pandas as pd
 from typing import Dict, Optional, List
-    
+
+# ---------- Pairing helper ----------
 class Format:
-    def __init__(self, df: pd.DataFrame, group_col: str = "sample_id"):
-        self.pairs = []
-        
-        # Group by the specified column
-        for i, group in df.groupby(group_col):
+    @staticmethod
+    def group_pairs(df: pd.DataFrame, group_col: str = "sample_id") -> List[pd.DataFrame]:
+        """
+        Groups by `group_col`, preserves original row order (index),
+        and splits each group into 2-row slices (pairs). Returns a list of DataFrames.
+        """
+        pairs: List[pd.DataFrame] = []
+        if df is None or df.empty or group_col not in df.columns:
+            return pairs
+
+        # groupby(..., sort=False) keeps existing order of appearance per group
+        for _, group in df.groupby(group_col, sort=False):
             group = group.sort_index()
-            
-            # Split into pairs of rows
             for i in range(0, len(group), 2):
                 pair = group.iloc[i:i+2]
-                self.pairs.append(pair)
+                if not pair.empty:
+                    pairs.append(pair)
+        return pairs
 
 
-
-
-ex = ExcelExtractor("test_file_nc.xlsx", sheet="", header_row_index=1)
+# ---------- Extract ----------
+# NOTE: your Extract class signature is (path, header_row_index=1), so no "sheet" param
+ex = Extract("test_file_nc.xlsx", header_row_index=1)
 records = list(ex.records())
 
-
-# ----- helpers -----
+# ---------- helpers ----------
 def norm(s) -> str:
     # Uppercase, strip edges, collapse inner spaces (e.g., "ccv 1" -> "CCV1")
     if s is None:
@@ -44,10 +51,9 @@ def is_qc(sample_id: str) -> bool:
         return True
     return False
 
-# QC records (by sample_id pattern), regardless of sample_type
+# ---------- Filter into QC and Samples ----------
 wanted_QC = [r for r in records if is_qc(r.sample_id)]
 
-# Samples = sample_type == "Samples" AND not rinses AND not QC-looking IDs
 wanted_Samples = [
     r for r in records
     if str(r.sample_type).strip() == "Samples"
@@ -55,17 +61,16 @@ wanted_Samples = [
     and not is_qc(r.sample_id)
 ]
 
-# DataFrames
+# ---------- DataFrames ----------
 df_qc      = pd.DataFrame([r.__dict__ for r in wanted_QC])
 df_samples = pd.DataFrame([r.__dict__ for r in wanted_Samples])
 
-# QC REPORT
+# ---------- QC Report ----------
 class QCReporter:
     def __init__(self, df: pd.DataFrame, targets: Optional[Dict[str, float]] = None):
         cols = [c for c in ["sample_id", "ppm"] if c in df.columns]
         self.df = df[cols].copy()
 
-        # Default targets
         default_targets = {"MDL": 0.2, "QCS": 10.0, "CCV": 10.0}
         self.targets = default_targets.copy()
         if targets:
@@ -94,7 +99,7 @@ class QCReporter:
 
         output_rows = []
 
-        # ---- Handle MDL ----
+        # ---- MDL ----
         mdl_rows = qc[qc["sample_id"] == "MDL"]
         if not mdl_rows.empty:
             output_rows.extend(mdl_rows.to_dict("records"))
@@ -107,7 +112,7 @@ class QCReporter:
                 "%RPD": self._rpd(vals)
             })
 
-        # ---- Handle QCS ----
+        # ---- QCS ----
         qcs_rows = qc[qc["sample_id"] == "QCS"]
         if not qcs_rows.empty:
             output_rows.extend(qcs_rows.to_dict("records"))
@@ -120,11 +125,10 @@ class QCReporter:
                 "%RPD": self._rpd(vals)
             })
 
-        # ---- Handle each CCV# separately ----
+        # ---- CCV# ----
         ccv_rows = qc[qc["sample_id"].str.match(r"^CCV\d+$")]
         if not ccv_rows.empty:
-            ccv_ids = sorted(ccv_rows["sample_id"].unique(),
-                             key=lambda s: int(s[3:]))
+            ccv_ids = sorted(ccv_rows["sample_id"].unique(), key=lambda s: int(s[3:]))
             for cid in ccv_ids:
                 block = ccv_rows[ccv_rows["sample_id"] == cid]
                 output_rows.extend(block.to_dict("records"))
@@ -137,10 +141,9 @@ class QCReporter:
                     "%RPD": self._rpd(vals)
                 })
 
-        # ---- Handle QCB + CCB together ----
+        # ---- QCB + CCB ----
         qcbccb_rows = qc[qc["sample_id"].str.match(r"^(QCB|CCB\d+)$")]
         if not qcbccb_rows.empty:
-            # order: QCB, then CCB1, CCB2, ...
             qcb_rows = qcbccb_rows[qcbccb_rows["sample_id"] == "QCB"]
             ccb_rows = qcbccb_rows[qcbccb_rows["sample_id"].str.match(r"^CCB\d+$")]
 
@@ -148,13 +151,11 @@ class QCReporter:
                 output_rows.extend(qcb_rows.to_dict("records"))
 
             if not ccb_rows.empty:
-                ccb_ids = sorted(ccb_rows["sample_id"].unique(),
-                                 key=lambda s: int(s[3:]))
+                ccb_ids = sorted(ccb_rows["sample_id"].unique(), key=lambda s: int(s[3:]))
                 for cid in ccb_ids:
                     block = ccb_rows[ccb_rows["sample_id"] == cid]
                     output_rows.extend(block.to_dict("records"))
 
-            # combined average
             vals = qcbccb_rows["ppm"].tolist()
             avg = sum(vals) / len(vals)
             output_rows.append({
@@ -166,8 +167,7 @@ class QCReporter:
 
         return pd.DataFrame(output_rows)
 
-
-# ---------------- Calculations (integrated) ----------------
+# ---------- Calculations ----------
 class Calculations:
     @staticmethod
     def avg(values):
@@ -198,15 +198,14 @@ class Calculations:
             return None
         v1, v2 = df_pair[value_col].tolist()
         return Calculations.rpd(v1, v2)
-    
+
     @staticmethod
     def to_umol_per_l_c(avg_mean, factor: float = 83.26):
-        """Convert an average mean to µmol/L C using the given factor."""
         if avg_mean is None:
             return None
         return float(avg_mean) * float(factor)
 
-
+# ---------- Sample Reporter ----------
 class SampleReporter:
     def __init__(self, value_col: str = "mean", factor: float = 83.26) -> None:
         self.value_col = value_col
@@ -225,21 +224,13 @@ class SampleReporter:
         f = factor if factor is not None else self.factor
         avg_mean = self.compute_pair_average(df_pair, value_col=vcol)
         return Calculations.to_umol_per_l_c(avg_mean, factor=f)
-    
 
-
-
-
-
-# Group pairs automatically
+# ---------- Use it ----------
 sr = SampleReporter()
 pairs = Format.group_pairs(df_samples)
 
-
-
 print(df_samples)
 
-# Optional: see the grouped pairs + calculations
 for i, p in enumerate(pairs, 1):
     sid = str(p.iloc[0]["sample_id"]) if not p.empty else "NA"
     avg_mean = sr.compute_pair_average(p, value_col="mean")
@@ -248,7 +239,6 @@ for i, p in enumerate(pairs, 1):
     print(p)
     print(f"Average(mean): {avg_mean}")
     print(f"%RPD(mean): {rpd_mean}")
-
 
 for p in pairs:
     sid = str(p.iloc[0]["sample_id"]) if not p.empty else "NA"
