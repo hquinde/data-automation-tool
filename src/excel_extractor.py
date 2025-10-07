@@ -3,7 +3,7 @@ from openpyxl import load_workbook
 from typing import Iterator
 from extract_base import Extractor, Record
 
-class ExcelExtractor(Extractor):
+class Extractor(Extractor):
     def __init__(self, path: str, header_row_index: int = 1):
         """
         path: path to the Excel file
@@ -28,19 +28,6 @@ class ExcelExtractor(Extractor):
             name = str(title.value).strip()
             if name:
                 self.columns.setdefault(name, i)
-
-    @staticmethod
-    def to_float(value) -> float | None:
-        if value is None or value == "":
-            return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def to_str(value) -> str:
-        return "" if value is None else str(value).strip()
 
     def records(self) -> Iterator[Record]:
         wb = load_workbook(self.path, read_only=True, data_only=True)
@@ -77,15 +64,25 @@ class ExcelExtractor(Extractor):
         finally:
             wb.close()
 
+    @staticmethod
+    def to_float(value) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def to_str(value) -> str:
+        return "" if value is None else str(value).strip()
+
+
 
 '''
-
 # Example use
-
-ex = ExcelExtractor("test_file.xlsx", header_row_index = 1)
-
+ex = Extractor("test_file.xlsx", header_row_index = 1)
 for rec in ex.records():
     print(rec.sample_id, rec.sample_type, rec.mean, rec.ppm, rec.adjusted_abs)
-
 
 '''
