@@ -1,78 +1,30 @@
-# excel_extract.py
-from openpyxl import load_workbook
-from typing import Iterator
-from extract_base import Extractor, Record
+import pandas as pd
+from typing import Optional
 
-class Extract(Extractor):
-    def __init__(self, path: str, header_row_index: int = 1):
-        """
-        path: path to the Excel file
-        header_row_index: which row has the headers (1-based, usually 1)
-        """
-        self.path = path
+
+class Extract:
+    def __init__(self, file_path: str, header_row_index: int = 1):
+        self.file_path = file_path
         self.header_row_index = header_row_index
-        self.columns = {}  # will be filled automatically
-
-        # Auto-map columns from header row
-        wb = load_workbook(self.path, read_only=True, data_only=True)
-        ws = wb.active  # always first sheet
-        self.map_columns(ws)
-        wb.close()
-
-    def map_columns(self, ws) -> None:
-        """Build self.columns = {title: index} from the header row."""
-        self.columns.clear()
-        for i, title in enumerate(ws[self.header_row_index]):
-            if title.value is None:
-                continue
-            name = str(title.value).strip()
-            if name:
-                self.columns.setdefault(name, i)
-
-    def records(self) -> Iterator[Record]:
-        wb = load_workbook(self.path, read_only=True, data_only=True)
-        try:
-            ws = wb.active  # always first sheet
-
-            # Resolve indices once (faster per-row)
-            idx_sample_id    = self.columns.get("Sample ID")
-            idx_sample_type  = self.columns.get("Sample Type")
-            idx_mean         = self.columns.get("Mean (per analysis type)")
-            idx_ppm          = self.columns.get("PPM")
-            idx_adjusted_abs = self.columns.get("Adjusted ABS")
-
-            for row in ws.iter_rows(min_row=self.header_row_index + 1, values_only=True):
-                def get(idx: int | None):
-                    return None if idx is None or idx >= len(row) else row[idx]
-
-                sample_id    = self.to_str(get(idx_sample_id))
-                sample_type  = self.to_str(get(idx_sample_type))
-                mean         = self.to_float(get(idx_mean))
-                ppm          = self.to_float(get(idx_ppm))
-                adjusted_abs = self.to_float(get(idx_adjusted_abs))
-
-                if not sample_id and mean is None and ppm is None and adjusted_abs is None:
-                    continue
-
-                yield Record(
-                    sample_id=sample_id,
-                    sample_type=sample_type,
-                    mean=mean,
-                    ppm=ppm,
-                    adjusted_abs=adjusted_abs
-                )
-        finally:
-            wb.close()
 
     @staticmethod
-    def to_float(value) -> float | None:
-        if value is None or value == "":
-            return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
+    def normalize(s):
+        return "" if s is None else str(s).strip()
 
-    @staticmethod
-    def to_str(value) -> str:
-        return "" if value is None else str(value).strip()
+    def extract_data(self, cols=("Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS")) -> Optional[pd.DataFrame]:
+        """Extract data from Excel file with specified columns."""
+        want = {self.normalize(c) for c in cols}
+
+        def selector(col_name):
+            return self.normalize(col_name) in want
+
+        try:
+            df = pd.read_excel(self.file_path, header=self.header_row_index - 1, usecols=selector)
+            print(f"Successfully loaded {len(df)} rows from {self.file_path}")
+            return df
+        except FileNotFoundError:
+            print(f"Error: File not found at {self.file_path}")
+            return None
+        except ValueError as error:
+            print(f"Error reading columns: {error}")
+            return None
