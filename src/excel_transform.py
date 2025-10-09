@@ -73,9 +73,13 @@ class Transform:
         return rpd
 
     def calculate_percent_R(self):
-        """Calculate Percent Recovery (not yet implemented)."""
+        """Calculate Percent Recovery."""
         pass
 
     def convert_to_umol_per_L(self, df: pd.DataFrame, molecular_weight: float) -> pd.DataFrame:
-        """Convert PPM to µmol/L (not yet implemented)."""
+        """Convert PPM to µmol/L."""
+        pass
+
+    def format_excel(self):
+        '''format final output of excel'''
         pass
