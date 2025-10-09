@@ -79,7 +79,3 @@ class Transform:
     def convert_to_umol_per_L(self, df: pd.DataFrame, molecular_weight: float) -> pd.DataFrame:
         """Convert PPM to µmol/L."""
         pass
-
-    def format_excel(self):
-        '''format final output of excel'''
-        pass

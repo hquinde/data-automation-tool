@@ -1,6 +1,13 @@
 from excel_extract import Extract
 from excel_transform import Transform
 
+class Load:
+    def __init__(self):
+        pass 
+    
+    def format_excel(self):
+        pass
+
 
 # Step 1: Extract data
 extractor = Extract("test_file_nc.xlsx")
