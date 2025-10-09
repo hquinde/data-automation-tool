@@ -2,11 +2,38 @@ from excel_extract import Extract
 from excel_transform import Transform
 
 class Load:
-    def __init__(self):
-        pass 
+    def __init__(self, transformer, output_path="results.xlsx"):
+        self.transformer = transformer
+        self.output_path = output_path
     
-    def format_excel(self):
+    def format_calibration(self):
+        # Build calibration sheet
         pass
+    
+    def format_qc(self):
+        # Build QC sheet
+        pass
+    
+    def format_samples(self):
+        # Build samples sheet
+        pass
+    
+    def format_reported_results(self):
+        # Build reported results sheet
+        pass
+    
+    def format_cai(self):
+        # Build C.A.I sheet
+        pass
+    
+    def export_all(self):
+        # Create Excel writer and call all format methods
+        # Write each to its own sheet
+        pass
+
+
+
+
 
 
 # Step 1: Extract data
