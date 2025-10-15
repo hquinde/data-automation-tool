@@ -64,7 +64,7 @@ class Transform:
         if len(values) < 2:
             return None
         
-        v1, v2 = float(values[0]), float(values[1])
+        v1, v2 = float(values[-2]), float(values[-1])
         
         if mean_ppm == 0:
             return None
@@ -72,10 +72,47 @@ class Transform:
         rpd = abs(v1 - v2) / mean_ppm * 100.0
         return rpd
 
-    def calculate_percent_R(self):
-        """Calculate Percent Recovery."""
-        pass
+    def calculate_percent_R(
+        self,
+        df: pd.DataFrame,
+        target_col: str = "Mean (per analysis type)",
+        value_col: str = "PPM",
+        nominal_override: Optional[float] = None,
+    ) -> Optional[float]:
+        """
+        Calculate Percent Recovery relative to the nominal concentration.
+        Uses the first non-null value in `target_col` as the reference.
+        """
+        if df.empty:
+            return None
 
-    def convert_to_umol_per_L(self, df: pd.DataFrame, molecular_weight: float) -> pd.DataFrame:
-        """Convert PPM to µmol/L."""
-        pass
+        if value_col not in df.columns:
+            return None
+
+        values = df[value_col].dropna()
+        if values.empty:
+            return None
+
+        if nominal_override is not None:
+            nominal = float(nominal_override)
+        else:
+            if target_col not in df.columns:
+                return None
+            targets = df[target_col].dropna()
+            if targets.empty:
+                return None
+            nominal = float(targets.iloc[0])
+
+        if nominal == 0:
+            return None
+
+        mean_value = float(values.mean())
+        percent_r = mean_value / nominal * 100.0
+        return percent_r
+
+    def convert_to_umol_per_L(self, ppm_value: Optional[float], molecular_weight: float) -> Optional[float]:
+        """Convert a PPM concentration to µmol/L using the provided molecular weight."""
+        if ppm_value is None or molecular_weight == 0:
+            return None
+
+        return float(ppm_value) * 1000.0 / molecular_weight
