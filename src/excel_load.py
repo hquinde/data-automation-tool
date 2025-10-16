@@ -1,9 +1,12 @@
 from typing import List, Tuple
 
 import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Font
 
 from excel_extract import Extract
 from excel_transform import Transform
+
 
 class Load:
     def __init__(self, transformer, output_path: str = "results.xlsx", molecular_weight: float = 12.01057):
@@ -13,6 +16,26 @@ class Load:
         self.output_path = output_path
         self.molecular_weight = molecular_weight
 
+    @staticmethod
+    def is_out_of_bounds(value, check_type):
+        """
+        Check if value is out of bounds.
+        Returns True if OUT OF BOUNDS (make it red).
+        """
+        try:
+            val = float(value)
+        except:
+            return True
+        
+        if check_type == 'QC_R':
+            return val < 90 or val > 110
+        elif check_type == 'MDL_R':
+            return val < 45 or val > 145
+        elif check_type == 'RPD':
+            return val > 10
+        else:
+            return True
+
     def _sample_groups(self) -> Tuple[pd.DataFrame, List[Tuple[str, pd.DataFrame]]]:
         cleaned = self.transformer.clean_data()
         if cleaned.empty:
@@ -21,7 +44,7 @@ class Load:
         df = cleaned.copy()
         df["Sample ID"] = df["Sample ID"].astype("string").str.strip()
 
-        qc_pattern = r"(?i)^(MDL|QCS|QCB|CCV\d*|CCB\d*|MQ\s*Rinse)$"
+        qc_pattern = r"(?i)^(MDL|QCS|QCB|CCV\d+|CCB\d+|MQ\s*(?:Auto)?Rinse)$"
         samples_only = df[~df["Sample ID"].str.match(qc_pattern, na=False)]
         if samples_only.empty:
             return samples_only, []
@@ -108,11 +131,11 @@ class Load:
                 if group_records:
                     last_record = group_records[-1]
                     if mean_ppm is not None:
-                        last_record["Mean ppm C"] = round(mean_ppm, 3)
+                        last_record["Mean ppm C"] = mean_ppm
                     if percent_r is not None:
-                        last_record["%R"] = round(percent_r, 3)
+                        last_record["%R"] = percent_r
                     if rpd is not None:
-                        last_record["%RPD"] = round(rpd, 3)
+                        last_record["%RPD"] = rpd
 
                 records.extend(group_records)
 
@@ -135,7 +158,7 @@ class Load:
             records.append(
                 {
                     "Sample ID": "Average",
-                    "PPM C": round(average_ppm, 6) if average_ppm is not None else None,
+                    "PPM C": average_ppm if average_ppm is not None else None,
                     "Mean ppm C": None,
                     "%R": None,
                     "%RPD": None,
@@ -147,32 +170,38 @@ class Load:
     def format_samples(self):
         samples_only, groups = self._sample_groups()
         if samples_only.empty or not groups:
-            return pd.DataFrame(columns=["Sample ID", "PPM C", "Mean ppm C", "%RPD"])
+            return pd.DataFrame(columns=["Sample ID", "PPM C", "Mean ppm C", "%RPD", "umol/L C"])
 
-        columns = ["Sample ID", "PPM C", "Mean ppm C", "%RPD"]
+        columns = ["Sample ID", "PPM C", "Mean ppm C", "%RPD", "umol/L C"]
         records = []
 
         for sample_id, group_df in groups:
             group_records = []
             for _, row in group_df.iterrows():
+                ppm_value = row.get("PPM")
+                umol_value = self.transformer.convert_to_umol_per_L(ppm_value, self.molecular_weight)
                 group_records.append(
                     {
                         "Sample ID": row["Sample ID"],
                         "PPM C": row.get("PPM"),
                         "Mean ppm C": None,
                         "%RPD": None,
+                        "umol/L C": umol_value,
                     }
                 )
 
             mean_ppm = self.transformer.calculate_mean_ppm(group_df)
             rpd = self.transformer.calculate_rpd(group_df, mean_ppm)
+            mean_umol = self.transformer.convert_to_umol_per_L(mean_ppm, self.molecular_weight)
 
             if group_records:
                 last_record = group_records[-1]
                 if mean_ppm is not None:
-                    last_record["Mean ppm C"] = round(mean_ppm, 3)
+                    last_record["Mean ppm C"] = mean_ppm
                 if rpd is not None:
-                    last_record["%RPD"] = round(rpd, 3)
+                    last_record["%RPD"] = rpd
+                if mean_umol is not None:
+                    last_record["umol/L C"] = mean_umol
 
             records.extend(group_records)
 
@@ -191,44 +220,11 @@ class Load:
             records.append(
                 {
                     "Sample ID": sample_id,
-                    "umol/L C": round(umol, 3) if umol is not None else None,
+                    "umol/L C": umol if umol is not None else None,
                 }
             )
 
         return pd.DataFrame(records, columns=["Sample ID", "umol/L C"])
-    
-    def format_cai(self):
-        rows = [
-            ["", "Attachment 1", "", "", "", ""],
-            ["", "CESE", "", "", "", ""],
-            ["", "Corrective Action Log", "", "", "", ""],
-            ["", "", "", "", "", ""],
-            ["", "Analyst:", "", "", "Instrument:", ""],
-            ["", "Date of Analysis:", "", "", "Method:", ""],
-            ["", "", "", "", "", ""],
-            [
-                "",
-                "Project Number(s)/Batch Numbers",
-                "Excursions",
-                "Affected Samples",
-                "Criteria Comparison",
-                "Corrective Action/Explanation",
-            ],
-            ["", "", "", "", "", ""],
-            ["", "", "", "", "", ""],
-            ["", "", "", "", "", ""],
-            ["", "", "", "", "", ""],
-            ["", "", "", "", "", "Below Detection Limit: Retest"],
-            ["", "", "", "", "", "Above Curve: Dilute and Retest"],
-            ["", "", "", "", "", ""],
-            ["", "Reviewed by:", "", "", "", ""],
-            ["", "", "QA/QC Reviewer", "", "", "Date"],
-            ["", "", "", "", "", ""],
-            ["", "", "Project Investigator", "", "", "Date"],
-        ]
-
-        df = pd.DataFrame(rows, columns=["A", "B", "C", "D", "E", "F"])
-        return df, {"header": False, "index": False}
     
     def export_all(self):
         sheets = {
@@ -236,12 +232,12 @@ class Load:
             "QC": (self.format_qc(), {}),
             "Samples": (self.format_samples(), {}),
             "Reported Results": (self.format_reported_results(), {}),
-            "C.A.I": self.format_cai(),
         }
 
         wrote_any = False
         try:
-            with pd.ExcelWriter(self.output_path) as writer:
+            # Write data with openpyxl engine
+            with pd.ExcelWriter(self.output_path, engine='openpyxl') as writer:
                 for sheet_name, (df, options) in sheets.items():
                     if df is None or df.empty:
                         print(f"Skipping sheet '{sheet_name}': no rows to export")
@@ -252,6 +248,45 @@ class Load:
                     df.to_excel(writer, sheet_name=sheet_name, **export_options)
                     wrote_any = True
                     print(f"Wrote {len(df)} rows to sheet '{sheet_name}'")
+            
+            # Apply red text formatting
+            if wrote_any:
+                wb = load_workbook(self.output_path)
+                red_font = Font(color='FF0000', bold=True)
+                
+                # Format QC sheet - check %R column
+                if 'QC' in wb.sheetnames:
+                    ws = wb['QC']
+                    for row_idx in range(2, ws.max_row + 1):
+                        # Get Sample ID from column A (1)
+                        sample_id_cell = ws.cell(row=row_idx, column=1)
+                        sample_id = sample_id_cell.value
+                        
+                        # %R is in column D (4)
+                        r_cell = ws.cell(row=row_idx, column=4)
+                        if r_cell.value is not None:
+                            # Determine check type based on Sample ID
+                            if sample_id and 'MDL' in str(sample_id).upper():
+                                check_type = 'MDL_R'
+                            else:
+                                check_type = 'QC_R'
+                            
+                            if self.is_out_of_bounds(r_cell.value, check_type):
+                                r_cell.font = red_font
+                
+                # Format Samples sheet - check %RPD column
+                if 'Samples' in wb.sheetnames:
+                    ws = wb['Samples']
+                    for row_idx in range(2, ws.max_row + 1):
+                        # %RPD is in column D (4)
+                        rpd_cell = ws.cell(row=row_idx, column=4)
+                        if rpd_cell.value is not None:
+                            if self.is_out_of_bounds(rpd_cell.value, 'RPD'):
+                                rpd_cell.font = red_font
+                
+                wb.save(self.output_path)
+                print(f"Applied bounds checking and formatting")
+                
         except ImportError as exc:
             print(f"Failed to export Excel file: {exc}")
             return
@@ -262,12 +297,8 @@ class Load:
             print("No data exported — all sheets were empty.")
 
 
-
-
-
-
 # Step 1: Extract data
-extractor = Extract("test_file_nc.xlsx")
+extractor = Extract("TEST2.xlsx")
 raw_data = extractor.extract_data()
 
 if raw_data is not None:
