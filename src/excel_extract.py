@@ -1,30 +1,40 @@
 import pandas as pd
-from typing import Optional
-
 
 class Extract:
-    def __init__(self, file_path: str, header_row_index: int = 1):
+    def __init__(self, file_path: str):
         self.file_path = file_path
-        self.header_row_index = header_row_index
+        self.header_row_index = 1
+        self.cols = ("Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS")
 
-    @staticmethod
-    def normalize(s):
-        return "" if s is None else str(s).strip()
 
-    def extract_data(self, cols=("Sample ID", "Sample Type", "Mean (per analysis type)", "PPM", "Adjusted ABS")) -> Optional[pd.DataFrame]:
-        """Extract data from Excel file with specified columns."""
-        want = {self.normalize(c) for c in cols}
+    def extract_data(self):
+        wanted_columns = set()
+        for column in self.cols:
+            wanted_columns.add(column.strip())
+        
+        def should_include_column(column_name):
+            if column_name.strip() in wanted_columns:
+                return True
+            else:
+                return False
+        
 
-        def selector(col_name):
-            return self.normalize(col_name) in want
 
+        # print statements for debugging
         try:
-            df = pd.read_excel(self.file_path, header=self.header_row_index - 1, usecols=selector)
+            df = pd.read_excel(
+                self.file_path, 
+                header=self.header_row_index - 1,
+                usecols=should_include_column
+            )
+            
             print(f"Successfully loaded {len(df)} rows from {self.file_path}")
             return df
+            
         except FileNotFoundError:
             print(f"Error: File not found at {self.file_path}")
             return None
+            
         except ValueError as error:
             print(f"Error reading columns: {error}")
             return None
