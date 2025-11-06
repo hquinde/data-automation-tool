@@ -1,7 +1,6 @@
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font
-
 from excel_extract import Extract
 from excel_transform import Transform
 
@@ -9,7 +8,7 @@ from excel_transform import Transform
 class Load:
     def __init__(self, transformer):
         self.transformer = transformer
-        self.output_path = "results.xlsx"
+        self.output_path = "output_files/results.xlsx"
         self.molecular_weight = 12.01057
 
 
@@ -217,7 +216,6 @@ class Load:
 
     def write_sheets(self):
         sheets = {
-            "Raw Data": self.transformer.df,
             "QC": self.format_qc(),
             "Samples": self.format_samples(),
             "Reported Results": self.format_reported_results(),
@@ -267,7 +265,7 @@ class Load:
 
 
 if __name__ == "__main__":
-    extractor = Extract("POSTER.xlsx")
+    extractor = Extract("input_files/presentation_example.xlsx")
     raw_data = extractor.extract_data()
 
     if raw_data is not None:
