@@ -217,6 +217,7 @@ class Load:
 
     def write_sheets(self):
         sheets = {
+            "Raw Data": self.transformer.df,
             "QC": self.format_qc(),
             "Samples": self.format_samples(),
             "Reported Results": self.format_reported_results(),
@@ -266,7 +267,7 @@ class Load:
 
 
 if __name__ == "__main__":
-    extractor = Extract("TEST2.xlsx")
+    extractor = Extract("POSTER.xlsx")
     raw_data = extractor.extract_data()
 
     if raw_data is not None:
