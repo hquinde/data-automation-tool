@@ -12,6 +12,7 @@ class Load:
         self.output_path = "results.xlsx"
         self.molecular_weight = 12.01057
 
+
     @staticmethod
     def is_out_of_bounds(value, check_type):
         val = float(value)
@@ -24,6 +25,7 @@ class Load:
             return val > 10
         else:
             return True
+
 
     def sample_groups(self):
         cleaned = self.transformer.clean_data()
@@ -39,6 +41,7 @@ class Load:
 
         return samples_only, groups
 
+
     def get_unique_ordered_ids(self, df):
         ordered_ids = []
         seen = set()
@@ -48,13 +51,15 @@ class Load:
                 ordered_ids.append(sid)
         return ordered_ids
 
+
     def build_sample_groups(self, df, ordered_ids):
         groups = []
         for sample_id in ordered_ids:
             group_df = df[df["Sample ID"] == sample_id]
             groups.append((sample_id, group_df))
         return groups
-    
+
+
     def format_qc(self):
         df = self.transformer.df
         samples = df[df.get("Sample Type") == "Samples"]
@@ -75,6 +80,7 @@ class Load:
         records.append(self.build_qcb_average(qcb_samples))
 
         return pd.DataFrame(records, columns=columns)
+
 
     def build_qc_records(self, qc_samples):
         qc_targets = {
@@ -118,6 +124,7 @@ class Load:
         
         return records
 
+
     def build_qcb_records(self, qcb_samples):
         records = []
         for _, row in qcb_samples.iterrows():
@@ -132,6 +139,7 @@ class Load:
             )
         return records
 
+
     def build_qcb_average(self, qcb_samples):
         average_ppm = self.transformer.calculate_mean_ppm(qcb_samples)
         return {
@@ -141,7 +149,8 @@ class Load:
             "%R": None,
             "%RPD": None,
         }
-    
+
+
     def format_samples(self):
         samples_only, groups = self.sample_groups()
         
@@ -154,6 +163,7 @@ class Load:
             records.extend(group_records)
 
         return pd.DataFrame(records, columns=columns)
+
 
     def build_sample_group_records(self, group_df):
         group_records = []
@@ -169,6 +179,7 @@ class Load:
             )
         return group_records
 
+
     def add_summary_to_last_record(self, group_df, group_records):
         mean_ppm = self.transformer.calculate_mean_ppm(group_df)
         rpd = self.transformer.calculate_rpd(group_df, mean_ppm)
@@ -178,7 +189,8 @@ class Load:
         last_record["Mean ppm C"] = mean_ppm
         last_record["%RPD"] = rpd
         last_record["umol/L C"] = mean_umol
-    
+
+
     def format_reported_results(self):
         _, groups = self.sample_groups()
         
@@ -195,11 +207,13 @@ class Load:
             )
 
         return pd.DataFrame(records, columns=["Sample ID", "umol/L C"])
-    
+
+
     def export_all(self):
         self.write_sheets()
         self.apply_formatting()
         print(f"Export finished: {self.output_path}")
+
 
     def write_sheets(self):
         sheets = {
@@ -213,6 +227,7 @@ class Load:
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
                 print(f"Wrote {len(df)} rows to sheet '{sheet_name}'")
 
+
     def apply_formatting(self):
         wb = load_workbook(self.output_path)
         red_font = Font(color='FF0000', bold=True)
@@ -222,6 +237,7 @@ class Load:
         
         wb.save(self.output_path)
         print(f"Applied bounds checking and formatting")
+
 
     def format_qc_sheet(self, wb, red_font):
         ws = wb['QC']
@@ -238,6 +254,7 @@ class Load:
                 
                 if self.is_out_of_bounds(r_cell.value, check_type):
                     r_cell.font = red_font
+
 
     def format_samples_sheet(self, wb, red_font):
         ws = wb['Samples']
