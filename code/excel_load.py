@@ -32,7 +32,7 @@ class Load:
         df = cleaned.copy()
         df["Sample ID"] = df["Sample ID"].astype("string").str.strip()
 
-        qc_pattern = r"(?i)^(MDL|QCS|QCB|CCV\d+|CCB\d+|MQ\s*(?:Auto)?Rinse)$"
+        qc_pattern = r"(?i)^(MDL|ICV|ICB|CCV\d+|CCB\d+|Rinse)$"
         samples_only = df[~df["Sample ID"].str.match(qc_pattern, na=False)]
 
         ordered_ids = self.get_unique_ordered_ids(samples_only)
@@ -64,8 +64,8 @@ class Load:
         samples = df[df.get("Sample Type") == "Samples"]
         samples["Sample ID"] = samples["Sample ID"].astype("string").str.strip()
 
-        qc_mask = samples["Sample ID"].str.match(r"(?i)^(MDL|QCS|CCV\d+)$", na=False)
-        qcb_mask = samples["Sample ID"].str.match(r"(?i)^(QCB|CCB\d+)$", na=False)
+        qc_mask = samples["Sample ID"].str.match(r"(?i)^(MDL|ICV|CCV\d+)$", na=False)
+        qcb_mask = samples["Sample ID"].str.match(r"(?i)^(ICB|CCB\d+)$", na=False)
 
         qc_samples = samples[qc_mask]
         qcb_samples = samples[qcb_mask]
@@ -84,7 +84,7 @@ class Load:
     def build_qc_records(self, qc_samples):
         qc_targets = {
             "MDL": 0.2,
-            "QCS": 18.0,
+            "ICV": 18.0,
         }
         
         records = []

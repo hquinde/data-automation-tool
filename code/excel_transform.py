@@ -22,7 +22,7 @@ class Transform:
 
     def filter_qcb_ccb(self, df):
         sample_id = df["Sample ID"].astype("string").str.strip()
-        mask = sample_id.str.fullmatch(r"QCB|CCB\d*", na=False)
+        mask = sample_id.str.fullmatch(r"ICB|CCB\d*", na=False) # changed QCB to ICB
         filtered = df[mask]
         return filtered
 
