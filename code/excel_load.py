@@ -262,15 +262,3 @@ class Load:
             if rpd_cell.value is not None:
                 if self.is_out_of_bounds(rpd_cell.value, 'RPD'):
                     rpd_cell.font = red_font
-
-
-if __name__ == "__main__":
-    extractor = Extract("input_files/presentation_example.xlsx")
-    raw_data = extractor.extract_data()
-
-    if raw_data is not None:
-        transformer = Transform(raw_data)
-        loader = Load(transformer)
-        loader.export_all()
-    else:
-        print("Failed to load data. Check file path and format.")
